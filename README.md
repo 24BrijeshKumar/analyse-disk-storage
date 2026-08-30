@@ -53,4 +53,4 @@ Run the script directly with optional parameters:
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.# analyse-disk-storage
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
