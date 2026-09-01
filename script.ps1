@@ -169,6 +169,11 @@ function Measure-DirectoryTree {
     # 2. Recurse into subdirectories
     try {
         foreach ($subDir in $DirInfo.EnumerateDirectories()) {
+            # Skip junction points and directory symlinks to avoid double-counting and loops
+            if ($subDir.Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
+                continue
+            }
+
             $childNode = Measure-DirectoryTree -DirInfo $subDir -CurrentDepth ($CurrentDepth + 1) -Context $Context
             $node.Children.Add($childNode)
             $node.DirCount += (1 + $childNode.DirCount)
@@ -194,12 +199,18 @@ function Measure-DirectoryTree {
         $metricText = "  |-- Metrics : Folders: {0:N0}  |  Files: {1:N0}  |  Errors: {2:N0}" -f `
             $Context.TotalFoldersProcessed, $Context.TotalFilesProcessed, $Context.TotalAccessErrors
         
-        # Line 2: Path Truncation based on visual terminal window
+        # Line 2: Path Truncation based on visual terminal window (Middle-Ellipsis)
         $prefix = "  \-- Current : "
-        $maxPathLen = [Math]::Max(10, $winWidth - $prefix.Length - 2)
+        $maxPathLen = [Math]::Max(15, $winWidth - $prefix.Length - 2)
         $curPath = $DirInfo.FullName
         if ($curPath.Length -gt $maxPathLen) {
-            $curPath = "..." + $curPath.Substring($curPath.Length - $maxPathLen + 3)
+            $tailLen = [Math]::Min(20, [int]($maxPathLen * 0.3))
+            $headLen = $maxPathLen - $tailLen - 3
+            if ($headLen -gt 0) {
+                $curPath = $curPath.Substring(0, $headLen) + "..." + $curPath.Substring($curPath.Length - $tailLen)
+            } else {
+                $curPath = "..." + $curPath.Substring($curPath.Length - $maxPathLen + 3)
+            }
         }
         $pathText = $prefix + $curPath
 
@@ -871,12 +882,17 @@ $fullHtml = @"
 
 $fullHtml | Out-File -FilePath $OutHtml -Encoding UTF8
 
-# Wipe the 'Generating HTML Report...' line completely and print final location
+# Wipe the 'Generating HTML Report...' line completely and print relative location
 $clearRow = " " * ([Math]::Max(40, $Host.UI.RawUI.WindowSize.Width) - 1)
 Write-Host ("`r$clearRow`r") -NoNewline
 
-Write-Host "HTML Report generated:" -ForegroundColor Yellow
-Write-Host ">> $OutHtml" -ForegroundColor Gray
+$displayReportPath = $OutHtml
+if ($displayReportPath.StartsWith($PSScriptRoot)) {
+    $displayReportPath = $displayReportPath.Substring($PSScriptRoot.Length).TrimStart('\', '/')
+}
+
+Write-Host "HTML Report generated: " -ForegroundColor Yellow -NoNewline
+Write-Host "$displayReportPath" -ForegroundColor Cyan
 Write-Host ""
 
 if (-not $NoOpen) {
